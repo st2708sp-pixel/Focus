@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Modes">
+  <title>Modes</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    * {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+      background: #000;
+    }
+
+    .ambient {
+      position: fixed;
+      inset: -20vh -35vw auto auto;
+      width: 75vw;
+      height: 75vw;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(255,255,255,.13), rgba(255,255,255,0) 67%);
+      filter: blur(6px);
+      pointer-events: none;
+      animation: breathe 9s ease-in-out infinite alternate;
+    }
+
+    .app-shell {
+      padding-top: calc(28px + var(--safe-top));
+      padding-bottom: calc(28px + var(--safe-bottom));
+      animation: rise .7s cubic-bezier(.2,.8,.2,1) both;
+    }
+
+    .mode-button {
+      border: 1.5px solid rgba(255,255,255,.9);
+      transition: transform .22s ease, background .22s ease, color .22s ease, border-color .22s ease;
+    }
+
+    .mode-button:active {
+      transform: scale(.975);
+    }
+
+    .mode-button.active {
+      background: #fff;
+      color: #000;
+      border-color: #fff;
+    }
+
+    .mode-button.active .mode-total {
+      color: rgba(0,0,0,.62);
+    }
+
+    .mode-total {
+      color: rgba(255,255,255,.62);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .timer {
+      font-variant-numeric: tabular-nums;
+      letter-spacing: .08em;
+    }
+
+    .timer.running {
+      animation: timerGlow 2.4s ease-in-out infinite;
+    }
+
+    .hamburger-line {
+      display: block;
+      height: 1.5px;
+      width: 22px;
+      background: currentColor;
+      transition: transform .2s ease, opacity .2s ease;
+    }
+
+    .arrow-left,
+    .arrow-right {
+      display: inline-block;
+      height: 12px;
+      width: 12px;
+      border-bottom: 1.5px solid currentColor;
+    }
+
+    .arrow-left {
+      border-left: 1.5px solid currentColor;
+      transform: rotate(45deg);
+    }
+
+    .arrow-right {
+      border-right: 1.5px solid currentColor;
+      transform: rotate(-45deg);
+    }
+
+    .stats-panel {
+      transform: translateX(100%);
+      transition: transform .34s cubic-bezier(.2,.8,.2,1);
+    }
+
+    .stats-panel.open {
+      transform: translateX(0);
+    }
+
+    .stats-scrim {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .24s ease;
+    }
+
+    .stats-scrim.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .chart-line {
+      stroke-dasharray: 720;
+      stroke-dashoffset: 720;
+      animation: drawLine .7s ease forwards;
+    }
+
+    .chart-dot {
+      cursor: pointer;
+      opacity: 0;
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: popDot .28s ease forwards;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes breathe {
+      from { opacity: .42; transform: translate3d(0,0,0) scale(.96); }
+      to { opacity: .9; transform: translate3d(-8vw,8vh,0) scale(1.12); }
+    }
+
+    @keyframes timerGlow {
+      0%, 100% { text-shadow: 0 0 0 rgba(255,255,255,0); }
+      50% { text-shadow: 0 0 22px rgba(255,255,255,.18); }
+    }
+
+    @keyframes drawLine {
+      to { stroke-dashoffset: 0; }
+    }
+
+    @keyframes popDot {
+      from { opacity: 0; transform: scale(.2); }
+      to { opacity: 1; transform: scale(1); }
+    }
+  </style>
+</head>
+<body class="font-sans text-white antialiased">
+  <div class="ambient" aria-hidden="true"></div>
+
+  <main class="app-shell mx-auto flex min-h-dvh w-full max-w-[480px] flex-col px-4">
+    <header class="mb-10 flex items-center justify-between">
+      <h1 class="text-[15px] font-medium tracking-[.32em] text-white/80">MODES</h1>
+      <div class="flex items-center gap-4">
+        <button id="installButton" class="hidden text-sm text-white/55 transition hover:text-white" type="button">Install</button>
+        <button id="statsButton" class="flex h-10 w-10 flex-col items-center justify-center gap-[5px] rounded-full text-white/80 transition hover:text-white" type="button" aria-label="Open statistics" aria-expanded="false">
+          <span class="hamburger-line"></span>
+          <span class="hamburger-line"></span>
+          <span class="hamburger-line"></span>
+        </button>
+      </div>
+    </header>
+
+    <section class="mb-12 pt-8 text-center" aria-live="polite">
+      <p id="currentModeName" class="mb-4 min-h-8 text-[28px] font-light tracking-wide text-white">No mode selected</p>
+      <p id="currentTimer" class="timer text-[46px] font-extralight leading-none sm:text-[54px]">00:00:00</p>
+    </section>
+
+    <section class="flex flex-1 flex-col justify-center pb-8">
+      <div id="modesGrid" class="flex flex-col gap-4" aria-label="Modes"></div>
+    </section>
+
+    <footer class="text-center text-xs text-white/35">
+      Saved on this device. Daily totals reset at midnight.
+    </footer>
+  </main>
+
+  <div id="statsScrim" class="stats-scrim fixed inset-0 z-40 bg-black/55" aria-hidden="true"></div>
+  <aside id="statsPanel" class="stats-panel fixed right-0 top-0 z-50 flex h-dvh w-full max-w-[520px] flex-col bg-black px-5 py-6 text-white shadow-[-24px_0_60px_rgba(0,0,0,.45)]" aria-label="Statistics" aria-hidden="true">
+    <div class="mb-6 flex items-center justify-between">
+      <div>
+        <p class="text-[13px] font-medium tracking-[.28em] text-white/55">STATISTICS</p>
+        <p id="statsHint" class="mt-2 text-sm text-white/45">Tap a point to see exact time.</p>
+      </div>
+      <button id="closeStatsButton" class="h-10 w-10 text-2xl font-extralight leading-none text-white/70 transition hover:text-white" type="button" aria-label="Close statistics">x</button>
+    </div>
+
+    <div class="mb-5 flex items-center justify-between border-y border-white/10 py-3">
+      <button id="prevMonthButton" class="flex h-10 w-10 items-center justify-center text-white/70 transition hover:text-white disabled:text-white/15" type="button" aria-label="Previous month"><span class="arrow-left" aria-hidden="true"></span></button>
+      <p id="panelMonthLabel" class="text-sm tracking-[.2em] text-white/55"></p>
+      <button id="nextMonthButton" class="flex h-10 w-10 items-center justify-center text-white/70 transition hover:text-white disabled:text-white/15" type="button" aria-label="Next month"><span class="arrow-right" aria-hidden="true"></span></button>
+    </div>
+
+    <div id="chartsList" class="min-h-0 flex-1 space-y-8 overflow-y-auto pb-6 pr-1"></div>
+  </aside>
+
+  <script>
+    const modes = [
+      { id: 'focus', name: 'Focus work.' },
+      { id: 'rest', name: 'Rest.' },
+      { id: 'eat', name: 'Eat.' },
+      { id: 'workout', name: 'Work out.' },
+      { id: 'read', name: 'Read.' },
+      { id: 'visualisation', name: 'Visualisation.' },
+      { id: 'meditation', name: 'Meditation.' }
+    ];
+
+    const firstStatsMonth = new Date(2026, 5, 1);
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+
+    const state = {
+      currentMode: null,
+      currentModeStartTime: null,
+      dailyStats: {},
+      history: {},
+      timerInterval: null,
+      resetTimeout: null,
+      installPrompt: null,
+      statsOpen: false,
+      visibleMonth: getCurrentMonth(),
+      hasRenderedButtons: false,
+      chartRefreshHandle: null
+    };
+
+    const els = {
+      currentModeName: document.getElementById('currentModeName'),
+      currentTimer: document.getElementById('currentTimer'),
+      modesGrid: document.getElementById('modesGrid'),
+      installButton: document.getElementById('installButton'),
+      statsButton: document.getElementById('statsButton'),
+      statsScrim: document.getElementById('statsScrim'),
+      statsPanel: document.getElementById('statsPanel'),
+      closeStatsButton: document.getElementById('closeStatsButton'),
+      prevMonthButton: document.getElementById('prevMonthButton'),
+      nextMonthButton: document.getElementById('nextMonthButton'),
+      panelMonthLabel: document.getElementById('panelMonthLabel'),
+      chartsList: document.getElementById('chartsList'),
+      statsHint: document.getElementById('statsHint')
+    };
+
+    function todayKey() {
+      return new Date().toDateString();
+    }
+
+    function dateKey(date = new Date()) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function getCurrentMonth() {
+      const now = new Date();
+      const month = new Date(now.getFullYear(), now.getMonth(), 1);
+      return month < firstStatsMonth ? new Date(firstStatsMonth) : month;
+    }
+
+    function monthLabel(monthDate) {
+      return `${monthNames[monthDate.getMonth()]} ${monthDate.getFullYear()}.`;
+    }
+
+    function sameMonth(a, b) {
+      return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+    }
+
+    function defaultStats() {
+      return Object.fromEntries(modes.map((mode) => [mode.id, 0]));
+    }
+
+    function loadHistory() {
+      const savedHistory = localStorage.getItem('modes.history');
+      state.history = savedHistory ? JSON.parse(savedHistory) : {};
+
+      // Migrate the previous single-day storage into the new all-days history.
+      const legacyDate = localStorage.getItem('modes.statsDate');
+      const legacyStats = localStorage.getItem('modes.dailyStats');
+      if (legacyDate && legacyStats && !state.history[dateKey()]) {
+        state.history[dateKey()] = { ...defaultStats(), ...JSON.parse(legacyStats) };
+        saveHistory();
+      }
+    }
+
+    function saveHistory() {
+      localStorage.setItem('modes.history', JSON.stringify(state.history));
+    }
+
+    function loadDailyStats() {
+      const today = dateKey();
+
+      if (state.history[today]) {
+        state.dailyStats = { ...defaultStats(), ...state.history[today] };
+        return;
+      }
+
+      state.dailyStats = defaultStats();
+      saveDailyStats();
+    }
+
+    function saveDailyStats() {
+      const today = dateKey();
+      state.history[today] = { ...defaultStats(), ...state.dailyStats };
+      saveHistory();
+      localStorage.setItem('modes.dailyStats', JSON.stringify(state.dailyStats));
+      localStorage.setItem('modes.statsDate', todayKey());
+    }
+
+    function saveCurrentMode() {
+      if (!state.currentMode) {
+        localStorage.removeItem('modes.currentMode');
+        localStorage.removeItem('modes.currentModeStartTime');
+        return;
+      }
+
+      localStorage.setItem('modes.currentMode', state.currentMode);
+      localStorage.setItem('modes.currentModeStartTime', String(state.currentModeStartTime));
+    }
+
+    function loadCurrentMode() {
+      const savedMode = localStorage.getItem('modes.currentMode');
+      const savedStartTime = Number(localStorage.getItem('modes.currentModeStartTime'));
+      const exists = modes.some((mode) => mode.id === savedMode);
+
+      if (!exists || !savedStartTime) return;
+
+      state.currentMode = savedMode;
+      state.currentModeStartTime = savedStartTime;
+      beginTimer();
+    }
+
+    function persistActiveElapsed() {
+      if (!state.currentMode || !state.currentModeStartTime) return;
+
+      const elapsed = Math.max(0, Math.floor((Date.now() - state.currentModeStartTime) / 1000));
+      state.dailyStats[state.currentMode] = (state.dailyStats[state.currentMode] || 0) + elapsed;
+      state.currentModeStartTime = Date.now();
+      saveDailyStats();
+      saveCurrentMode();
+
+      if (state.statsOpen) renderCharts({ animate: false });
+    }
+
+    function setMode(modeId) {
+      persistActiveElapsed();
+
+      if (state.currentMode === modeId) {
+        state.currentMode = null;
+        state.currentModeStartTime = null;
+        stopTimer();
+      } else {
+        state.currentMode = modeId;
+        state.currentModeStartTime = Date.now();
+        beginTimer();
+      }
+
+      if (navigator.vibrate) navigator.vibrate(30);
+
+      saveCurrentMode();
+      render();
+    }
+
+    function beginTimer() {
+      stopTimer();
+      state.timerInterval = window.setInterval(render, 1000);
+    }
+
+    function stopTimer() {
+      if (state.timerInterval) window.clearInterval(state.timerInterval);
+      state.timerInterval = null;
+    }
+
+    function secondsForMode(modeId) {
+      const base = state.dailyStats[modeId] || 0;
+
+      if (state.currentMode !== modeId || !state.currentModeStartTime) return base;
+
+      return base + Math.max(0, Math.floor((Date.now() - state.currentModeStartTime) / 1000));
+    }
+
+    function formatTimer(seconds) {
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = seconds % 60;
+      return [h, m, s].map((unit) => String(unit).padStart(2, '0')).join(':');
+    }
+
+    function formatTotal(seconds) {
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = seconds % 60;
+
+      if (h > 0) return `${h}h ${m}m`;
+      if (m > 0) return `${m}m ${s}s`;
+      return `${s}s`;
+    }
+
+    function render() {
+      const activeMode = modes.find((mode) => mode.id === state.currentMode);
+      const activeSeconds = state.currentModeStartTime
+        ? Math.max(0, Math.floor((Date.now() - state.currentModeStartTime) / 1000))
+        : 0;
+
+      els.currentModeName.textContent = activeMode ? activeMode.name : 'No mode selected';
+      els.currentTimer.textContent = formatTimer(activeSeconds);
+      els.currentTimer.classList.toggle('running', Boolean(activeMode));
+
+      els.modesGrid.innerHTML = '';
+
+      const shouldAnimateButtons = !state.hasRenderedButtons;
+      state.hasRenderedButtons = true;
+
+      modes.forEach((mode, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'mode-button flex w-full items-center justify-between rounded-full px-7 py-5 text-left text-white';
+        if (shouldAnimateButtons) {
+          button.style.animation = `rise .5s cubic-bezier(.2,.8,.2,1) ${index * 45}ms both`;
+        }
+        button.setAttribute('aria-pressed', String(state.currentMode === mode.id));
+
+        if (state.currentMode === mode.id) button.classList.add('active');
+
+        button.innerHTML = `
+          <span class="text-[18px] font-normal tracking-wide">${mode.name}</span>
+          <span class="mode-total min-w-[76px] text-right text-sm font-light">${formatTotal(secondsForMode(mode.id))}</span>
+        `;
+
+        button.addEventListener('click', () => setMode(mode.id));
+        els.modesGrid.appendChild(button);
+      });
+
+    }
+
+    function scheduleMidnightReset() {
+      if (state.resetTimeout) window.clearTimeout(state.resetTimeout);
+
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setDate(midnight.getDate() + 1);
+      midnight.setHours(0, 0, 0, 0);
+
+      state.resetTimeout = window.setTimeout(() => {
+        if (state.currentMode && state.currentModeStartTime) {
+          const elapsedUntilMidnight = Math.max(0, Math.floor((midnight.getTime() - state.currentModeStartTime) / 1000));
+          state.dailyStats[state.currentMode] = (state.dailyStats[state.currentMode] || 0) + elapsedUntilMidnight;
+          state.history[dateKey(new Date(midnight.getTime() - 1))] = { ...defaultStats(), ...state.dailyStats };
+          saveHistory();
+        }
+
+        state.dailyStats = defaultStats();
+        if (state.currentMode) state.currentModeStartTime = midnight.getTime();
+        saveDailyStats();
+        saveCurrentMode();
+        render();
+        scheduleMidnightReset();
+        if (state.statsOpen) renderCharts({ animate: false });
+      }, midnight.getTime() - now.getTime());
+    }
+
+    function daysInMonth(monthDate) {
+      return new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
+    }
+
+    function dateForMonthDay(monthDate, day) {
+      return new Date(monthDate.getFullYear(), monthDate.getMonth(), day);
+    }
+
+    function secondsForHistoryDay(modeId, dayDate) {
+      if (dateKey(dayDate) === dateKey()) return secondsForMode(modeId);
+      return state.history[dateKey(dayDate)]?.[modeId] || 0;
+    }
+
+    function renderCharts({ animate = true } = {}) {
+      const label = monthLabel(state.visibleMonth);
+      const currentMonth = getCurrentMonth();
+      const canGoBack = state.visibleMonth > firstStatsMonth;
+      const canGoForward = !sameMonth(state.visibleMonth, currentMonth);
+
+      els.panelMonthLabel.textContent = label;
+      els.prevMonthButton.disabled = !canGoBack;
+      els.nextMonthButton.disabled = !canGoForward;
+      els.chartsList.innerHTML = '';
+
+      modes.forEach((mode) => {
+        els.chartsList.appendChild(createModeChart(mode, label, animate));
+      });
+
+      scheduleChartRefresh();
+    }
+
+    function scheduleChartRefresh() {
+      if (state.chartRefreshHandle) window.clearTimeout(state.chartRefreshHandle);
+      if (!state.statsOpen) return;
+
+      state.chartRefreshHandle = window.setTimeout(() => {
+        renderCharts({ animate: false });
+      }, 10000);
+    }
+
+    function cancelChartRefresh() {
+      if (state.chartRefreshHandle) window.clearTimeout(state.chartRefreshHandle);
+      state.chartRefreshHandle = null;
+    }
+
+    function createModeChart(mode, label, animate) {
+      const days = daysInMonth(state.visibleMonth);
+      const values = Array.from({ length: days }, (_, index) => {
+        const day = index + 1;
+        return {
+          day,
+          date: dateForMonthDay(state.visibleMonth, day),
+          seconds: secondsForHistoryDay(mode.id, dateForMonthDay(state.visibleMonth, day))
+        };
+      });
+      const maxSeconds = Math.max(1, ...values.map((item) => item.seconds));
+      const width = 320;
+      const height = 116;
+      const padX = 8;
+      const padY = 14;
+      const plotW = width - padX * 2;
+      const plotH = height - padY * 2;
+      const monthStart = sameMonth(state.visibleMonth, firstStatsMonth);
+      const points = values.map((item, index) => {
+        const x = padX + (days === 1 ? 0 : (index / (days - 1)) * plotW);
+        const y = padY + plotH - (item.seconds / maxSeconds) * plotH;
+        return { ...item, x, y };
+      });
+      const polyline = points.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ');
+      const activeDots = points.filter((point) => point.seconds > 0);
+      const section = document.createElement('section');
+      section.className = 'chart-block';
+
+      const lineStyle = animate
+        ? `stroke-dasharray:720; stroke-dashoffset:720; animation:drawLine .7s ease forwards; animation-delay:${monthStart ? '120ms' : '0ms'};`
+        : '';
+      const baseDotStyle = 'transform-box:fill-box; transform-origin:center;';
+
+      section.innerHTML = `
+        <div class="mb-3 flex items-center gap-3 text-sm">
+          <span class="shrink-0 text-white/90">${mode.name}</span>
+          <span class="h-px flex-1 bg-white/20"></span>
+          <span class="shrink-0 text-white/55">${label}</span>
+        </div>
+        <svg class="h-[136px] w-full overflow-visible" viewBox="0 0 ${width} ${height}" role="img" aria-label="${mode.name} statistics for ${label}">
+          <line x1="${padX}" y1="${height - padY}" x2="${width - padX}" y2="${height - padY}" stroke="rgba(255,255,255,.12)" stroke-width="1" />
+          <line x1="${padX}" y1="${padY}" x2="${padX}" y2="${height - padY}" stroke="rgba(255,255,255,.08)" stroke-width="1" />
+          <polyline points="${polyline}" fill="none" stroke="rgba(255,255,255,.82)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="${lineStyle}" />
+          ${activeDots.map((point, index) => {
+            const dotStyle = animate
+              ? `${baseDotStyle} opacity:0; animation:popDot .28s ease forwards; animation-delay:${180 + index * 22}ms;`
+              : baseDotStyle;
+            return `<circle class="chart-dot" cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="4.2" fill="#fff" data-mode="${mode.id}" data-day="${point.day}" data-seconds="${point.seconds}" style="${dotStyle}" tabindex="0" role="button" aria-label="${mode.name} ${point.day}: ${formatTimer(point.seconds)}"></circle>`;
+          }).join('')}
+        </svg>
+        <div class="mt-1 flex justify-between text-[11px] text-white/30">
+          <span>1</span>
+          <span>${days}</span>
+        </div>
+      `;
+
+      section.querySelectorAll('.chart-dot').forEach((dot) => {
+        dot.addEventListener('click', () => showPointInfo(mode, dot.dataset.day, Number(dot.dataset.seconds)));
+        dot.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            showPointInfo(mode, dot.dataset.day, Number(dot.dataset.seconds));
+          }
+        });
+      });
+
+      return section;
+    }
+
+    function showPointInfo(mode, day, seconds) {
+      els.statsHint.textContent = `${mode.name} ${day} ${monthLabel(state.visibleMonth)} ${formatTimer(seconds)} (${formatTotal(seconds)})`;
+    }
+
+    function openStats() {
+      state.statsOpen = true;
+      renderCharts({ animate: true });
+      els.statsScrim.classList.add('open');
+      els.statsPanel.classList.add('open');
+      els.statsPanel.setAttribute('aria-hidden', 'false');
+      els.statsButton.setAttribute('aria-expanded', 'true');
+    }
+
+    function closeStats() {
+      state.statsOpen = false;
+      cancelChartRefresh();
+      els.statsScrim.classList.remove('open');
+      els.statsPanel.classList.remove('open');
+      els.statsPanel.setAttribute('aria-hidden', 'true');
+      els.statsButton.setAttribute('aria-expanded', 'false');
+      els.statsHint.textContent = 'Tap a point to see exact time.';
+    }
+
+    function setupStatsPanel() {
+      els.statsButton.addEventListener('click', openStats);
+      els.closeStatsButton.addEventListener('click', closeStats);
+      els.statsScrim.addEventListener('click', closeStats);
+      els.prevMonthButton.addEventListener('click', () => {
+        if (state.visibleMonth <= firstStatsMonth) return;
+        state.visibleMonth = new Date(state.visibleMonth.getFullYear(), state.visibleMonth.getMonth() - 1, 1);
+        if (state.visibleMonth < firstStatsMonth) state.visibleMonth = new Date(firstStatsMonth);
+        els.statsHint.textContent = 'Tap a point to see exact time.';
+        renderCharts({ animate: true });
+      });
+      els.nextMonthButton.addEventListener('click', () => {
+        const currentMonth = getCurrentMonth();
+        if (sameMonth(state.visibleMonth, currentMonth)) return;
+        state.visibleMonth = new Date(state.visibleMonth.getFullYear(), state.visibleMonth.getMonth() + 1, 1);
+        if (state.visibleMonth > currentMonth) state.visibleMonth = currentMonth;
+        els.statsHint.textContent = 'Tap a point to see exact time.';
+        renderCharts({ animate: true });
+      });
+      window.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && state.statsOpen) closeStats();
+      });
+    }
+
+    function installManifest() {
+      const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#000"/><text x="256" y="322" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="226" font-weight="700" fill="#fff">M</text></svg>`;
+      const icon = `data:image/svg+xml,${encodeURIComponent(iconSvg)}`;
+      const manifest = {
+        name: 'Modes',
+        short_name: 'Modes',
+        description: 'Daily mode tracker',
+        start_url: '.',
+        display: 'standalone',
+        background_color: '#000000',
+        theme_color: '#000000',
+        orientation: 'portrait',
+        icons: [
+          { src: icon, sizes: '192x192', type: 'image/svg+xml', purpose: 'any maskable' },
+          { src: icon, sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' }
+        ]
+      };
+
+      const link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = `data:application/manifest+json,${encodeURIComponent(JSON.stringify(manifest))}`;
+      document.head.appendChild(link);
+
+      const appleIcon = document.createElement('link');
+      appleIcon.rel = 'apple-touch-icon';
+      appleIcon.href = icon;
+      document.head.appendChild(appleIcon);
+    }
+
+    function setupInstallPrompt() {
+      window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        state.installPrompt = event;
+        els.installButton.classList.remove('hidden');
+      });
+
+      els.installButton.addEventListener('click', async () => {
+        if (!state.installPrompt) return;
+        state.installPrompt.prompt();
+        await state.installPrompt.userChoice;
+        state.installPrompt = null;
+        els.installButton.classList.add('hidden');
+      });
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') persistActiveElapsed();
+    });
+
+    window.addEventListener('beforeunload', persistActiveElapsed);
+
+    installManifest();
+    setupInstallPrompt();
+    setupStatsPanel();
+    loadHistory();
+    loadDailyStats();
+    loadCurrentMode();
+    scheduleMidnightReset();
+    render();
+  </script>
+</body>
+</html>
